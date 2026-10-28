@@ -7,7 +7,9 @@ import json
 import re
 import sys
 from pathlib import Path
-from xmlrpc.client import ServerProxy
+from xmlrpc.client import ProtocolError, ServerProxy
+
+from odoo_sesion import ModelosSesion
 
 CONFIG_PATH = Path('.odoo_demo_local.json')
 
@@ -17,13 +19,22 @@ def normalizar_telefono(valor):
     digitos = ''.join(caracter for caracter in valor if caracter.isdigit())
     if len(digitos) != 10:
         raise ValueError('El numero de prueba debe tener 10 digitos')
-    return digitos[-9:]  # FALLO INTENCIONAL: las pruebas muestran el problema.
+    return digitos
 
 
 def conectar(info):
     base_url = info['host'].rstrip('/')
     comun = ServerProxy(f'{base_url}/xmlrpc/2/common', allow_none=True)
-    uid = comun.authenticate(info['database'], info['user'], 'clave_equivocada', {})  # FALLO INTENCIONAL
+    try:
+        uid = comun.authenticate(info['database'], info['user'], info['password'], {})
+    except ProtocolError as error:
+        if error.errcode != 404:
+            raise
+        print('AVISO: el servidor no expone XML-RPC (404, Odoo 20). Se usa la sesion web como contingencia.')
+        modelos = ModelosSesion(info)
+        if not modelos.uid:
+            raise RuntimeError('Fallo la autenticacion de Odoo. Revise el codigo y la base.')
+        return modelos.uid, modelos
     if not uid:
         raise RuntimeError('Fallo la autenticacion de Odoo. Revise el codigo y la base.')
     modelos = ServerProxy(f'{base_url}/xmlrpc/2/object', allow_none=True)
@@ -37,10 +48,19 @@ def guardar_contacto(modelos, info, uid, referencia, nombre, telefono):
     Metodo de busqueda: search_read; para alta: create; para cambio: write.
     Devuelva siempre el ID del registro creado/actualizado.
     """
-    # TODO 1: busque por referencia tecnica exacta (campo ref).
-    # TODO 2: si existe, actualice name y phone con write.
-    # TODO 3: si no existe, cree con create (name, ref y phone).
-    raise NotImplementedError('Complete guardar_contacto usando execute_kw')
+    db, clave = info['database'], info['password']
+    # Busqueda por referencia tecnica exacta: es la llave que evita duplicados.
+    encontrados = modelos.execute_kw(
+        db, uid, clave, 'res.partner', 'search_read',
+        [[('ref', '=', referencia)]], {'fields': ['id'], 'limit': 1},
+    )
+    if encontrados:
+        partner_id = encontrados[0]['id']
+        modelos.execute_kw(db, uid, clave, 'res.partner', 'write',
+                           [[partner_id], {'name': nombre, 'phone': telefono}])
+        return partner_id
+    return modelos.execute_kw(db, uid, clave, 'res.partner', 'create',
+                              [{'name': nombre, 'ref': referencia, 'phone': telefono}])
 
 
 def main():
