@@ -6,8 +6,8 @@ Modelo actualizado: res.partner
 Referencia del contacto: WT-JUNIOR-CAND-01
 ID del contacto: 180 (mismo ID antes y despues de actualizar)
 Pruebas locales (n/3): 3/3
-Repositorio GitHub (privado): (ver git remote)
-Hash del commit: (ver git log)
+Repositorio GitHub (privado): https://github.com/Cesar183/wondertech-odoo-reto
+Hash del commit: 7249b28 (solucion)
 Herramienta IA: Claude Code
 Que parte sugirio la IA: diagnostico de los dos fallos, estructura de guardar_contacto con execute_kw
   (search_read -> write/create) y el transporte de contingencia odoo_sesion.py.
